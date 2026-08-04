@@ -31,7 +31,7 @@ jobs:
         run: sleep 20
 
       - name: Run Integration Tests
-        run: mvn test -pl tests -Dtest=ConcurrentCheckoutIntegrationTest
+        run: mvn test -f tests/pom.xml -Dtest=ConcurrentCheckoutIntegrationTest
 
   docker-build-and-push:
     name: Build & Push Docker Images
