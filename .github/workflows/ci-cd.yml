@@ -21,23 +21,17 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Maven Build & Unit Tests
+      - name: Maven Build All Modules
         run: mvn clean test -DskipITs
 
-      - name: Start Infrastructure for Integration Tests
-        run: docker-compose up -d --build
-
-      - name: Wait for Services Initialization
-        run: sleep 20
-
-      - name: Run Integration Tests
+      - name: Run Concurrency Integration Tests
         run: mvn test -f tests/pom.xml -Dtest=ConcurrentCheckoutIntegrationTest
 
   docker-build-and-push:
     name: Build & Push Docker Images
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.DOCKERHUB_USERNAME != ''
     strategy:
       matrix:
         service: [gateway-service, user-service, inventory-service, order-service, notification-service]
@@ -68,7 +62,7 @@ jobs:
     name: Deploy to Kubernetes Cluster (EKS/GKE)
     needs: docker-build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - name: Checkout Codebase
         uses: actions/checkout@v4
