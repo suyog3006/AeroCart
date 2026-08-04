@@ -24,6 +24,12 @@ jobs:
       - name: Maven Build & Unit Tests
         run: mvn clean test -DskipITs
 
+      - name: Start Infrastructure for Integration Tests
+        run: docker-compose up -d --build
+
+      - name: Wait for Services Initialization
+        run: sleep 20
+
       - name: Run Integration Tests
         run: mvn test -pl tests -Dtest=ConcurrentCheckoutIntegrationTest
 
