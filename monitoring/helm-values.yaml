@@ -1,0 +1,34 @@
+# Helm values for kube-prometheus-stack deployment
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    podMonitorSelector: {}
+    scrapeInterval: 15s
+
+grafana:
+  enabled: true
+  adminPassword: "adminpassword"
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.aerocart.internal
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'aerocart'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/aerocart
+
+nodeExporter:
+  enabled: true
+
+alertmanager:
+  enabled: true

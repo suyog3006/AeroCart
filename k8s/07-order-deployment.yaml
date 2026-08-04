@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: aerocart
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: aerocart/order-service:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: SHARD0_URL
+              value: "jdbc:postgresql://postgres-order-shard0:5432/order_db_shard0"
+            - name: SHARD1_URL
+              value: "jdbc:postgresql://postgres-order-shard1:5432/order_db_shard1"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+            - name: INVENTORY_SERVICE_URL
+              value: "http://inventory-service:8082"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: aerocart
+spec:
+  ports:
+    - port: 8083
+      targetPort: 8083
+  selector:
+    app: order-service
