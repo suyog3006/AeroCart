@@ -1,0 +1,2 @@
+com\aerocart\notification\consumer\IdempotentNotificationConsumer.class
+com\aerocart\notification\NotificationApplication.class
