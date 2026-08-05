@@ -1,14 +1,17 @@
+# Stage 1: Build
 FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
+
+# Copy the parent pom
 COPY pom.xml .
-COPY services/gateway-service/pom.xml services/gateway-service/
-COPY services/user-service/pom.xml services/user-service/
-COPY services/inventory-service/pom.xml services/inventory-service/
-COPY services/order-service/pom.xml services/order-service/
-COPY services/notification-service/pom.xml services/notification-service/
-COPY services/notification-service services/notification-service
+
+# Copy all service POMs and source directories to preserve the multi-module structure
+COPY services/ ./services/
+
+# Build the specific service with its dependencies
 RUN mvn clean package -pl services/notification-service -am -DskipTests
 
+# Stage 2: Runtime
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=builder /app/services/notification-service/target/*.jar app.jar
