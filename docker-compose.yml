@@ -1,205 +1,173 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  # -----------------------------------------------------------------
-  # Infrastructure: Apache Kafka & KRaft Mode
-  # -----------------------------------------------------------------
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: aerocart-kafka
-    ports:
-      - "9092:9092"
-      - "29092:29092"
+  # -------------------------------------------------
+  # Infrastructure
+  # -------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: aero-postgres
+    restart: unless-stopped
     environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_INTEGRATION_MECH: 'PLAINTEXT'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      POSTGRES_USER: aerocart
+      POSTGRES_PASSWORD: aerocart_pwd
+      POSTGRES_DB: aerocart
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      test: [ "CMD", "pg_isready", "-U", "aerocart" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: aero-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # -----------------------------------------------------------------
-  # Infrastructure: Redis Cache & Distributed Locking
-  # -----------------------------------------------------------------
-  redis:
-    image: redis:7.2-alpine
-    container_name: aerocart-redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass redispassword
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # -----------------------------------------------------------------
-  # Infrastructure: PostgreSQL Databases (Primary & Shards)
-  # -----------------------------------------------------------------
-  postgres-user:
-    image: postgres:15-alpine
-    container_name: aerocart-postgres-user
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: aero-zookeeper
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: user_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      - ALLOW_ANONYMOUS_LOGIN=yes
     ports:
-      - "5432:5432"
+      - "2181:2181"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d user_db"]
-      interval: 5s
-      timeout: 3s
+      test: [ "CMD", "echo", "ruok", "|", "nc", "localhost", "2181" ]
+      interval: 10s
+      timeout: 5s
       retries: 5
 
-  postgres-inventory:
-    image: postgres:15-alpine
-    container_name: aerocart-postgres-inventory
+  kafka:
+    image: bitnami/kafka:3.5
+    container_name: aero-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
     environment:
-      POSTGRES_DB: inventory_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - ALLOW_PLAINTEXT_LISTENER=yes
     ports:
-      - "5433:5432"
+      - "9092:9092"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d inventory_db"]
-      interval: 5s
-      timeout: 3s
+      test: [ "CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 15s
+      timeout: 10s
       retries: 5
 
-  postgres-order-shard0:
-    image: postgres:15-alpine
-    container_name: aerocart-postgres-order-shard0
-    environment:
-      POSTGRES_DB: order_db_shard0
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-    ports:
-      - "5434:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db_shard0"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  postgres-order-shard1:
-    image: postgres:15-alpine
-    container_name: aerocart-postgres-order-shard1
-    environment:
-      POSTGRES_DB: order_db_shard1
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-    ports:
-      - "5435:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db_shard1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # -----------------------------------------------------------------
-  # Microservices
-  # -----------------------------------------------------------------
+  # -------------------------------------------------
+  # Microservices (built from local Dockerfiles)
+  # -------------------------------------------------
   gateway-service:
     build:
       context: .
       dockerfile: services/gateway-service/Dockerfile
-    container_name: aerocart-gateway
-    ports:
-      - "8080:8080"
-    environment:
-      USER_SERVICE_URL: http://user-service:8081
-      INVENTORY_SERVICE_URL: http://inventory-service:8082
-      ORDER_SERVICE_URL: http://order-service:8083
+    container_name: aero-gateway
+    restart: unless-stopped
     depends_on:
       - user-service
       - inventory-service
       - order-service
+      - notification-service
+      - postgres
+      - redis
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/aerocart
+      - SPRING_DATASOURCE_USERNAME=aerocart
+      - SPRING_DATASOURCE_PASSWORD=aerocart_pwd
+      - SPRING_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "8080:8080"
 
   user-service:
     build:
       context: .
       dockerfile: services/user-service/Dockerfile
-    container_name: aerocart-user-service
+    container_name: aero-user
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/aerocart
+      - SPRING_DATASOURCE_USERNAME=aerocart
+      - SPRING_DATASOURCE_PASSWORD=aerocart_pwd
+      - SPRING_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     ports:
       - "8081:8081"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-user:5432/user_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgrespassword
-    depends_on:
-      postgres-user:
-        condition: service_healthy
 
   inventory-service:
     build:
       context: .
       dockerfile: services/inventory-service/Dockerfile
-    container_name: aerocart-inventory-service
-    ports:
-      - "8082:8082"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/inventory_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgrespassword
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: redispassword
+    container_name: aero-inventory
+    restart: unless-stopped
     depends_on:
-      postgres-inventory:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - postgres
+      - redis
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/aerocart
+      - SPRING_DATASOURCE_USERNAME=aerocart
+      - SPRING_DATASOURCE_PASSWORD=aerocart_pwd
+      - SPRING_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "8084:8084"
 
   order-service:
     build:
       context: .
       dockerfile: services/order-service/Dockerfile
-    container_name: aerocart-order-service
+    container_name: aero-order
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/aerocart
+      - SPRING_DATASOURCE_USERNAME=aerocart
+      - SPRING_DATASOURCE_PASSWORD=aerocart_pwd
+      - SPRING_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     ports:
       - "8083:8083"
-    environment:
-      SHARD0_URL: jdbc:postgresql://postgres-order-shard0:5432/order_db_shard0
-      SHARD1_URL: jdbc:postgresql://postgres-order-shard1:5432/order_db_shard1
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgrespassword
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      INVENTORY_SERVICE_URL: http://inventory-service:8082
-    depends_on:
-      postgres-order-shard0:
-        condition: service_healthy
-      postgres-order-shard1:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
 
   notification-service:
     build:
       context: .
       dockerfile: services/notification-service/Dockerfile
-    container_name: aerocart-notification-service
-    ports:
-      - "8084:8084"
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: redispassword
+    container_name: aero-notification
+    restart: unless-stopped
     depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "8085:8085"
+
+volumes:
+  pg_data:
