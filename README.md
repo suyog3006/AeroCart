@@ -1,61 +1,82 @@
-# AeroCart: Distributed Order Processing & E-Commerce System
+# AeroCart: Distributed Order Processing & E‑Commerce System
 
-A production-grade, highly available, distributed e-commerce architecture built with **Java (Spring Boot 3)**, **Apache Kafka**, **Redis**, **Sharded PostgreSQL**, **Docker**, **Kubernetes (EKS/GKE)**, and **Prometheus/Grafana**.
-
----
-
-## Architectural Highlights
-
-- **Microservices Ecosystem**: User Service, Inventory Service, Order Service, Notification Service, and API Gateway.
-- **Redis Distributed Locking**: Implemented in Inventory Service using Redisson & Lua scripts to handle ultra-high volume checkouts with zero overselling.
-- **Saga Transaction Pattern**: Orchestrated in Order Service to manage distributed multi-service transactions with compensating actions (`Release Inventory`, `Cancel Order`) upon payment or stock failure.
-- **Database Sharding**: Order database horizontally partitioned into `shard0` and `shard1` using `userId.hashCode() % 2` routing strategy.
-- **Kafka Event Streaming**: Exactly-once processing with transactional producers and Redis-backed consumer message deduplication.
+A production‑grade, highly available microservices architecture built with **Java 17 (Spring Boot 3)**, **Kafka**, **Redis**, **Sharded PostgreSQL**, **Docker**, **Kubernetes**, and **GitHub Actions**. The system implements a saga pattern for order processing, distributed locking for inventory, and event‑driven communication.
 
 ---
 
 ## Directory Structure
-
 ```
 AeroCart/
-├── docker-compose.yml
-├── pom.xml
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml
-├── services/
-│   ├── gateway-service/
-│   ├── user-service/
-│   ├── inventory-service/      # Redis Distributed Lock domain logic
-│   ├── order-service/          # Saga Orchestrator & Sharded DB logic
-│   └── notification-service/   # Idempotent Kafka consumer
-├── k8s/                        # Production Kubernetes Manifests & HPA
-├── tests/                      # Concurrency integration test suite (10k requests)
-└── monitoring/                 # Prometheus config, Grafana dashboard & Helm values
+├─ docker-compose.yml               # Local dev stack
+├─ .github/workflows/ci-cd.yml      # CI/CD pipeline
+├─ services/
+│   ├─ gateway-service/            # API gateway (port 8080)
+│   ├─ user-service/               # User management (port 8081)
+│   ├─ inventory-service/          # Inventory with Redis lock (port 8084)
+│   ├─ order-service/              # Saga orchestrator (port 8083)
+│   └─ notification-service/       # Idempotent Kafka consumer (port 8085)
+├─ k8s/                            # Production Kubernetes manifests
+├─ monitoring/                     # Prometheus & Grafana configs
+└─ README.md                       # You are reading it!
 ```
 
 ---
 
-## Quickstart & Local Execution
-
-### 1. Launch Infrastructure & Microservices via Docker Compose
+## Quick Start (Docker Compose)
 ```bash
-docker-compose up -d --build
+# From the repository root
+docker compose up --build -d
 ```
+The compose file brings up:
+- PostgreSQL (sharded or single instance as defined in the project)
+- Redis
+- Kafka + ZooKeeper
+- All five Spring Boot services
 
-### 2. Run High-Volume Concurrency Integration Test
-Simulate 10,000 concurrent checkout requests against the system:
+The services are exposed on the following ports:
+- **Gateway** – `8080`
+- **User** – `8081`
+- **Inventory** – `8084`
+- **Order** – `8083`
+- **Notification** – `8085`
+
+You can verify they are running with `docker compose ps` and view logs with `docker compose logs -f`.
+
+---
+
+## CI/CD Pipeline
+The GitHub Actions workflow (`.github/workflows/ci-cd.yml`) performs:
+1. **Lint & Test** – Maven clean test across all modules.
+2. **Docker Build & Push** – Builds each service image and pushes to Docker Hub (requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets).
+3. **Deploy** – Currently deploys to a Kubernetes cluster (EKS/GKE) using the manifests in `k8s/`. The workflow can be extended to deploy to **Oracle Cloud** by swapping the deployment job with OCI CLI steps.
+
+---
+
+## Deployment Options
+- **Kubernetes** – Apply the manifests in `k8s/` to any K8s cluster (`kubectl apply -f k8s/`).
+- **Oracle Cloud** – Replace the `deploy-to-k8s` job in the CI workflow with OCI commands to provision Container Instances or OCI OKE. Secrets such as `OCI_TENANCY`, `OCI_USER`, `OCI_FINGERPRINT`, and `OCI_PRIVATE_KEY` should be stored as GitHub secrets.
+
+---
+
+## Running Tests
 ```bash
+# Run the concurrency integration test suite
 mvn test -pl tests -Dtest=ConcurrentCheckoutIntegrationTest
 ```
+This simulates 10 k concurrent checkout requests against the running stack.
 
-### 3. Deploy to Kubernetes
-```bash
-kubectl apply -f k8s/
-```
+---
 
-### 4. Deploy Prometheus & Grafana Observability via Helm
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install aerocart-monitoring prometheus-community/kube-prometheus-stack -f monitoring/helm-values.yaml
-```
+## Contributing
+Feel free to open issues or pull requests. Follow the standard GitHub workflow:
+1. Fork the repo.
+2. Create a feature branch.
+3. Commit your changes.
+4. Open a PR.
+
+All contributions will be automatically validated by the CI pipeline.
+
+---
+
+## License
+This project is licensed under the MIT License.
