@@ -1,5 +1,8 @@
 name: AeroCart CI/CD Pipeline
 
+permissions:
+  contents: read
+  packages: write
 on:
   push:
     branches: [ main, master ]
@@ -41,6 +44,7 @@ jobs:
       - name: Checkout Codebase
         uses: actions/checkout@v4
       - name: Export Docker Hub Secrets
+        continue-on-error: true
         id: export-docker-secrets
         run: |
           echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
