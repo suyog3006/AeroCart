@@ -9,7 +9,7 @@ COPY pom.xml .
 COPY services/ ./services/
 
 # Build the specific service with its dependencies
-RUN mvn clean package -pl services/notification-service -am -DskipTests
+RUN mvn clean package -pl :notification-service -am -DskipTests
 
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-alpine

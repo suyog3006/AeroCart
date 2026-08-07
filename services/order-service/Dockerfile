@@ -10,7 +10,7 @@ COPY services/ ./services/
 
 # Build the specific service passed or defined (e.g., gateway-service, order-service, etc.)
 # Note: You can replace the hardcoded path with a build argument if using a single shared Dockerfile
-RUN mvn clean package -pl services/order-service -am -DskipTests
+RUN mvn clean package -pl :order-service -am -DskipTests
 
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-alpine

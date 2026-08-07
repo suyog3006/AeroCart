@@ -4,14 +4,15 @@ WORKDIR /app
 # Copy full repository context (required for root pom.xml & sub-modules)
 COPY . .
 
-# Build only notification-service and its dependencies
-RUN mvn -B -pl services/notification-service -am clean package -DskipTests
+# Build only user-service and its dependencies
+RUN mvn -B -pl :user-service -am clean package -DskipTests
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Copy the generated executable JAR explicitly
-COPY --from=builder /app/services/notification-service/target/notification-service-*.jar app.jar
+# Copy the generated executable JAR explicitly from the user-service target folder
+COPY --from=builder /app/services/user-service/target/user-service-*.jar app.jar
 
-EXPOSE 8082
+# Expose the correct port for user-service (Update this if your user-service uses a different port!)
+EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "app.jar"]
