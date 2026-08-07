@@ -82,9 +82,6 @@ jobs:
     needs: docker-build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    strategy:
-      matrix:
-        service: [gateway-service, user-service, inventory-service, order-service, notification-service]
     steps:
       - name: Checkout Codebase
         uses: actions/checkout@v4
